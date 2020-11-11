@@ -18,6 +18,8 @@ module top
   input  clk_25mhz,
   output flash_csn,
   output flash_mosi,
+  output flash_wpn,
+  output flash_holdn,
   input  flash_miso,
 
   output [7:0]  led,
@@ -119,7 +121,9 @@ module top
   always @(posedge clock)
     clock_locked <= sys_sdram_clocks_locked;
 
-
+  // prevent crosstalk at flash unused lines
+  assign flash_wpn = 1;
+  assign flash_holdn = 1;
   wire flash_sck;
   wire tristate = 1'b0;
   USRMCLK u1 (.USRMCLKI(flash_sck), .USRMCLKTS(tristate));
