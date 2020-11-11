@@ -68,6 +68,7 @@ VERILOG_FILES += usb/report_decoder/usbh_report_decoder_darfon.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_nes.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_saitek.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_xbox360.v
+#VERILOG_FILES += usb/report_decoder/usbh_report_decoder_radiona.v
 # for xbox360 also edit top.v C_usb_speed=1, C_report_bytes=20
 
 VERILOG_FILES += usb/usbhost/usbh_crc16.v
@@ -84,7 +85,8 @@ VHDL_FILES += t65/T65_MCode.vhd
 VHDL_FILES += t65/T65_ALU.vhd
 VHDL_FILES += t65/T65.vhd
 
-GHDL_MODULE = -mghdl
+#GHDL_MODULE = -mghdl
+GHDL_MODULE =
 
 %.json: ${VERILOG_FILES} ${VHDL_FILES}
 	$(YOSYS) $(GHDL_MODULE) -q -l synth.log \
