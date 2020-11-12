@@ -19,7 +19,7 @@ module usbh_report_decoder
   input  wire        i_clk, // same as USB core clock domain
   input  wire [63:0] i_report,
   input  wire        i_report_valid,
-  output reg   [7:0] o_btn
+  output reg   [8:0] o_btn
 );
 
   localparam c_autofire_bits = $clog2(c_clk_hz/c_autofire_hz)-1;
@@ -58,14 +58,15 @@ module usbh_report_decoder
   wire usbjoy_start  =   i_report[53];
   wire usbjoy_select =   i_report[52]; // button labelled "BACK"
 
-  reg [7:0] R_btn;
+  reg [8:0] R_btn;
   wire ab_start_select = usbjoy_a & usbjoy_b & usbjoy_start & usbjoy_select;
   always @(posedge i_clk)
   begin
-    o_btn <= R_btn | {6'b000000, autofire_b, autofire_a};
+    o_btn <= R_btn | {7'b000000, autofire_b, autofire_a};
     if(i_report_valid)
       R_btn <=
       {
+        usbjoyr_btn, // reset
         usbjoyl_r|usbjoyr_r|R_hat_udlr[0]|ab_start_select,
         usbjoyl_l|usbjoyr_l|R_hat_udlr[1]|ab_start_select,
         usbjoyl_d|usbjoyr_d|R_hat_udlr[2]|ab_start_select,
