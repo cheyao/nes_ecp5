@@ -1,3 +1,4 @@
+`default_nettype none
 module top
 #(
   parameter use_external_nes_joypad=0,
@@ -69,7 +70,6 @@ module top
   wire  btn_left  =  btn[5];
   wire  btn_right =  btn[6];
 
-
   // passthru to ESP32 micropython serial console
   assign wifi_rxd = ftdi_txd;
   assign ftdi_rxd = wifi_txd;
@@ -128,10 +128,11 @@ module top
   wire tristate = 1'b0;
   USRMCLK u1 (.USRMCLKI(flash_sck), .USRMCLKTS(tristate));
 
+  wire btn_reset;
   reg [23:0] R_reset = 24'hFFFFFF;
   always @(posedge clock)
   begin
-    if(clock_locked == 0 || dvi_clock_locked == 0)
+    if(clock_locked == 0 || dvi_clock_locked == 0 || btn_reset)
       R_reset <= 24'hFFFFFF;
     else
       if(R_reset[23])
@@ -173,7 +174,7 @@ module top
   assign usb_fpga_pu_dn = 1'b0;
   wire [C_report_bytes*8-1:0] S_report;
   wire S_report_valid;
-  wire [7:0] usb_buttons;
+  wire [8:0] usb_buttons;
   generate if (C_usb_speed >= 0) begin
   usbh_host_hid
   #(
@@ -205,12 +206,13 @@ module top
     .i_report_valid(S_report_valid),
     .o_btn(usb_buttons)
   );
-    assign led = usb_buttons;
+    assign led = usb_buttons[7:0];
   end
   else
     assign led = {1'b0,btn};
   endgenerate
 
+  assign btn_reset = usb_buttons[8];
   wire sys_reset;
 
   generate
@@ -235,14 +237,15 @@ module top
   end
   if(C_esp32_loader)
   begin
-    reg [6:0] R_btn_joy;
+    reg [7:0] R_btn_joy;
     if(C_osd_usb==0)
       always @(posedge clock)
-        R_btn_joy <= btn;
+        R_btn_joy <= {1'b0, btn};
     if(C_osd_usb==1)
       always @(posedge clock)
         R_btn_joy <=
         {
+            usb_buttons[8], //   reset
             usb_buttons[7], // 6 right
             usb_buttons[6], // 5 left
             usb_buttons[5], // 4 down
@@ -253,8 +256,9 @@ module top
         };
     if(C_osd_usb==2)
       always @(posedge clock)
-        R_btn_joy <= btn |
+        R_btn_joy <= {1'b0, btn} |
         {
+            usb_buttons[8], //   reset
             usb_buttons[7], // 6 right
             usb_buttons[6], // 5 left
             usb_buttons[5], // 4 down
@@ -397,7 +401,9 @@ module top
   assign sdram_cke = 1'b1;
   assign sdram_clk = clock_sdram_chip;
 
-  wire reset_nes = (!load_done || init_reset || download_reset || sys_reset) ;
+  reg reset_nes = 0;
+  always @(posedge clock)
+    reset_nes <= (!load_done || init_reset || download_reset || sys_reset);
   wire [1:0] nes_ce;
 
   // select button is not functional
@@ -430,7 +436,7 @@ module top
       begin
         R_buttons <= {btn_right, btn_left, btn_down, btn_up, btn_start, btn_select, btn_b, btn_a};
         if (joy_strobe)
-          joypad_bits <= R_buttons | usb_buttons;
+          joypad_bits <= R_buttons | usb_buttons[7:0];
         else
         begin
           if (!joy_clock && last_joypad_clock)
