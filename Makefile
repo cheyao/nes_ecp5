@@ -67,8 +67,8 @@ VERILOG_FILES += osd/spirw_slave_v.v
 VERILOG_FILES += usb/report_decoder/usbh_report_decoder_darfon.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_nes.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_saitek.v
-#VERILOG_FILES += usb/report_decoder/usbh_report_decoder_xbox360.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_radiona.v
+#VERILOG_FILES += usb/report_decoder/usbh_report_decoder_xbox360.v
 # for xbox360 also edit top.v C_usb_speed=1, C_report_bytes=20
 
 VERILOG_FILES += usb/usbhost/usbh_crc16.v
