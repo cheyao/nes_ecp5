@@ -138,8 +138,6 @@ module top
         R_reset <= R_reset-1;
   end
 
-  wire scandoubler_disable;
-
   wire  [8:0] cycle;
   wire  [8:0] scanline;
   wire  [5:0] color;
@@ -519,6 +517,33 @@ module top
     .o_r(osd_vga_r), .o_g(osd_vga_g), .o_b(osd_vga_b),
     .o_hsync(osd_vga_hsync), .o_vsync(osd_vga_vsync), .o_blank(osd_vga_blank)
   );
+
+  // VGA to DAC registers
+  reg [3:0] vga_dac_r, vga_dac_g, vga_dac_b;
+  reg vga_dac_hsync, vga_dac_vsync;
+  always @(posedge clk_pixel)
+  begin
+    vga_dac_hsync <= osd_vga_hsync;
+    vga_dac_vsync <= osd_vga_vsync;
+    vga_dac_r     <= osd_vga_r[7:4];
+    vga_dac_g     <= osd_vga_g[7:4];
+    vga_dac_b     <= osd_vga_b[7:4];
+  end
+  // Output to VGA PMOD - UPPER LEFT
+  assign gn[0] = osd_vga_vsync;
+  assign gp[0] = osd_vga_hsync;
+  assign gn[1] = osd_vga_r[7];
+  assign gp[1] = osd_vga_r[6];
+  assign gn[2] = osd_vga_r[5];
+  assign gp[2] = osd_vga_g[7];
+  assign gn[3] = osd_vga_g[6];
+  assign gp[3] = osd_vga_g[5];
+  assign gn[4] = osd_vga_b[7];
+  assign gp[4] = osd_vga_b[6];
+  assign gn[5] = osd_vga_b[5];
+  assign gp[5] = osd_vga_r[4];
+  assign gn[6] = osd_vga_g[4];
+  assign gp[6] = osd_vga_b[4];
 
   // VGA to digital video converter
   wire [1:0] tmds[3:0];
