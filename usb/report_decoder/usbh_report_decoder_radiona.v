@@ -19,7 +19,7 @@ module usbh_report_decoder
   input  wire        i_clk, // same as USB core clock domain
   input  wire [63:0] i_report,
   input  wire        i_report_valid,
-  output reg   [7:0] o_btn
+  output reg   [8:0] o_btn
 );
 
   localparam c_autofire_bits = $clog2(c_clk_hz/c_autofire_hz)-1;
@@ -69,15 +69,17 @@ module usbh_report_decoder
   wire autofire_b    = ((usbjoy_red2  | usbjoy_red4) & R_autofire[c_autofire_bits-1]);
   wire usbjoy_start  =   usbjoy_play1;
   wire usbjoy_select =   usbjoy_play2;
+  wire usbjoy_reset  =   usbjoy_coin;
   wire menu          =   usbjoy_red1 & usbjoy_red2 & usbjoy_red3 & usbjoy_red4;
 
-  reg [7:0] R_btn;
+  reg [8:0] R_btn;
   always @(posedge i_clk)
   begin
-    o_btn <= R_btn | {6'b000000, autofire_b, autofire_a};
+    o_btn <= R_btn | {7'b000000, autofire_b, autofire_a};
     if(i_report_valid)
       R_btn <=
       {
+        usbjoy_reset,
         usbjoyl_r|menu,
         usbjoyl_l|menu,
         usbjoyl_d|menu,
