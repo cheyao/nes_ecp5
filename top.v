@@ -48,8 +48,8 @@ module top
   // DVI out
   output  [3:0] gpdi_dp
 );
-  wire  btn_start =  btn[0];
-  wire  btn_a     =  btn[1];
+  wire  btn_start =  btn[1];
+  wire  btn_a     =  btn[2];
 
   wire [3:0] dvi_usb_clocks;
   wire dvi_clock_locked;
@@ -150,7 +150,7 @@ module top
   wire S_report_valid;
   wire [8:0] usb_buttons;
 
-  assign btn_reset = usb_buttons[8];
+  assign btn_reset = btn[0]; //usb_buttons[8];
   wire sys_reset;
 
   generate
