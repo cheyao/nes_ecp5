@@ -23,7 +23,7 @@ module flash_loader
 
 
 `ifndef SIM
-localparam [23:0] FLASH_BEGIN_ADDR = 24'h200000;
+localparam [23:0] FLASH_BEGIN_ADDR = 24'h400000;
 `else
 localparam [23:0] FLASH_BEGIN_ADDR = 24'h000000;
 `endif
