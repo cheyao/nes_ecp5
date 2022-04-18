@@ -62,9 +62,9 @@
 module vga2dvid(
 input wire clk_pixel,
 input wire clk_shift,
-input wire [C_depth - 1:0] in_red,
-input wire [C_depth - 1:0] in_green,
-input wire [C_depth - 1:0] in_blue,
+input wire [c_depth - 1:0] in_red,
+input wire [c_depth - 1:0] in_green,
+input wire [c_depth - 1:0] in_blue,
 input wire in_blank,
 input wire in_hsync,
 input wire in_vsync,
@@ -77,11 +77,11 @@ output wire [1:0] out_blue,
 output wire [1:0] out_clock
 );
 
-parameter C_shift_clock_synchronizer=1'b1;
-parameter C_parallel=1'b1;
-parameter C_serial=1'b1;
-parameter C_ddr=1'b0;
-parameter [31:0] C_depth=8;
+parameter c_shift_clock_synchronizer=1'b1;
+parameter c_parallel=1'b1;
+parameter c_serial=1'b1;
+parameter c_ddr=1'b0;
+parameter [31:0] c_depth=8;
 // VGA pixel clock, 25 MHz for 640x480
 // SDR: 10x clk_pixel, DDR: 5x clk_pixel, in phase with clk_pixel
 // parallel outputs
@@ -92,8 +92,8 @@ parameter [31:0] C_depth=8;
 wire [9:0] encoded_red; wire [9:0] encoded_green; wire [9:0] encoded_blue;
 reg [9:0] latched_red = 1'b0; reg [9:0] latched_green = 1'b0; reg [9:0] latched_blue = 1'b0;
 reg [9:0] shift_red = 1'b0; reg [9:0] shift_green = 1'b0; reg [9:0] shift_blue = 1'b0;
-parameter C_shift_clock_initial = 10'b0000011111;
-reg [9:0] shift_clock = C_shift_clock_initial;
+parameter c_shift_clock_initial = 10'b0000011111;
+reg [9:0] shift_clock = c_shift_clock_initial;
 reg R_shift_clock_off_sync = 1'b0;
 reg [7:0] R_shift_clock_synchronizer = 1'b0;
 reg [6:0] R_sync_fail;  // counts sync fails, after too many, reinitialize shift_clock
@@ -105,13 +105,13 @@ wire [7:0] green_d;
 wire [7:0] blue_d;
 
   assign c_blue = {in_vsync,in_hsync};
-  assign red_d[7:8 - C_depth] = in_red[C_depth - 1:0];
-  assign green_d[7:8 - C_depth] = in_green[C_depth - 1:0];
-  assign blue_d[7:8 - C_depth] = in_blue[C_depth - 1:0];
+  assign red_d[7:8 - c_depth] = in_red[c_depth - 1:0];
+  assign green_d[7:8 - c_depth] = in_green[c_depth - 1:0];
+  assign blue_d[7:8 - c_depth] = in_blue[c_depth - 1:0];
   // fill vacant low bits with value repeated (so min/max value is always 0 or 255)
-  generate if (C_depth < 8) begin: G_vacant_bits
+  generate if (c_depth < 8) begin: G_vacant_bits
       genvar i;
-    generate for (i=0; i <= 8 - C_depth - 1; i = i + 1) begin: G_bits
+    generate for (i=0; i <= 8 - c_depth - 1; i = i + 1) begin: G_bits
           assign red_d[i] = in_red[0];
       assign green_d[i] = in_green[0];
       assign blue_d[i] = in_blue[0];
@@ -119,13 +119,13 @@ wire [7:0] blue_d;
     endgenerate
   end
   endgenerate
-  generate if (C_shift_clock_synchronizer == 1'b1) begin: G_shift_clock_synchronizer
+  generate if (c_shift_clock_synchronizer == 1'b1) begin: G_shift_clock_synchronizer
       // sampler verifies is shift_clock state synchronous with pixel_clock
     always @(posedge clk_pixel) begin
       // does 0 to 1 transition at bits 5 downto 4 happen at rising_edge of clk_pixel?
-      // if shift_clock = C_shift_clock_initial then
-      if(shift_clock[5:4] == C_shift_clock_initial[5:4]) begin
-        // same as above line but simplified 
+      // if shift_clock = c_shift_clock_initial then
+      if(shift_clock[5:4] == c_shift_clock_initial[5:4]) begin
+        // same as above line but simplified
         R_shift_clock_off_sync <= 1'b0;
       end
       else begin
@@ -178,16 +178,16 @@ wire [7:0] blue_d;
     latched_blue <= encoded_blue;
   end
 
-  generate if (C_parallel == 1'b1) begin: G_parallel
+  generate if (c_parallel == 1'b1) begin: G_parallel
       assign outp_red = latched_red;
     assign outp_green = latched_green;
     assign outp_blue = latched_blue;
   end
   endgenerate
-  generate if ((C_serial &  ~C_ddr) == 1'b1) begin: G_SDR
+  generate if ((c_serial &  ~c_ddr) == 1'b1) begin: G_SDR
       always @(posedge clk_shift) begin
       //if shift_clock = "0000011111" then
-      if(shift_clock[5:4] == C_shift_clock_initial[5:4]) begin
+      if(shift_clock[5:4] == c_shift_clock_initial[5:4]) begin
         // same as above line but simplified
         shift_red <= latched_red;
         shift_green <= latched_green;
@@ -205,7 +205,7 @@ wire [7:0] blue_d;
         // synchronization failed.
         // after too many fails, reinitialize shift_clock
         if(R_sync_fail[(6)] == 1'b1) begin
-          shift_clock <= C_shift_clock_initial;
+          shift_clock <= c_shift_clock_initial;
           R_sync_fail <= {7{1'b0}};
         end
         else begin
@@ -216,10 +216,10 @@ wire [7:0] blue_d;
 
   end
   endgenerate
-  generate if ((C_serial & C_ddr) == 1'b1) begin: G_DDR
+  generate if ((c_serial & c_ddr) == 1'b1) begin: G_DDR
       always @(posedge clk_shift) begin
       //if shift_clock = "0000011111" then
-      if(shift_clock[5:4] == C_shift_clock_initial[5:4]) begin
+      if(shift_clock[5:4] == c_shift_clock_initial[5:4]) begin
         // same as above line but simplified
         shift_red <= latched_red;
         shift_green <= latched_green;
@@ -237,7 +237,7 @@ wire [7:0] blue_d;
         // synchronization failed.
         // after too many fails, reinitialize shift_clock
         if(R_sync_fail[(6)] == 1'b1) begin
-          shift_clock <= C_shift_clock_initial;
+          shift_clock <= c_shift_clock_initial;
           R_sync_fail <= {7{1'b0}};
         end
         else begin
@@ -251,7 +251,7 @@ wire [7:0] blue_d;
   // SDR: use only bit 0 from each out_* channel 
   // DDR: 2 bits per 1 clock period,
   // (one bit output on rising edge, other on falling edge of clk_shift)
-  generate if (C_serial == 1'b1) begin: G_serial
+  generate if (c_serial == 1'b1) begin: G_serial
       assign out_red = shift_red[1:0];
     assign out_green = shift_green[1:0];
     assign out_blue = shift_blue[1:0];

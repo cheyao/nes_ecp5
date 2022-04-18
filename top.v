@@ -3,17 +3,18 @@ module top
 #(
   parameter use_external_nes_joypad=0,
   parameter C_audio=2, // 0: direct MSB 4->4 bit DAC, 1: 16->1 bit PWM-DAC, 2: 16->4 bit PWM-DAC
-  parameter C_usb_speed=0,  // 0:6 MHz USB1.0, 1:48 MHz USB1.1, -1: USB disabled,
-  // xbox360 : C_report_bytes=20, C_report_bytes_strict=1
+  parameter C_usb_speed=-1,  // 0:6 MHz USB1.0, 1:48 MHz USB1.1, -1: USB disabled,
+  //xbox360 : C_report_bytes=20, C_report_bytes_strict=1
   // darfon  : C_report_bytes= 8, C_report_bytes_strict=1
-  parameter C_report_bytes=8, // 8:usual joystick, 20:xbox360
+  parameter C_report_bytes=20, // 8:usual joystick, 20:xbox360
   parameter C_report_bytes_strict=1, // 0:when report length is variable/unknown
   parameter C_autofire_hz=10, // joystick trigger and bumper
-  parameter C_osd_usb=2, // 0:OSD onboard BTN's, 1:OSD USB joystick, 2:both
+  parameter C_osd_usb=0, // 0:OSD onboard BTN's, 1:OSD USB joystick, 2:both
   parameter C_osd_transparency=1, // 0:opaque 1:transparent OSD menu
   // choose one: C_flash_loader or C_esp32_loader
-  parameter C_flash_loader=0, // fujprog -j flash -f 0x200000 100in1.img
-  parameter C_esp32_loader=1 // usage: import nes # for OSD press together A B SELECT START or all 4 directions
+  parameter C_flash_loader=1, // fujprog -j flash -f 0x200000 100in1.img
+  parameter C_esp32_loader=0, // usage: import nes # for OSD press together A B SELECT START or all 4 directions
+  parameter c_ddr    =  1  // 0:SDR 1:DDR
 )
 (
   input  clk_25mhz,
@@ -23,7 +24,7 @@ module top
   output flash_holdn,
   input  flash_miso,
 
-  output [7:0]  led,
+  output [3:0]  led,
 
   output sdram_csn,       // chip select
   output sdram_clk,       // clock to SDRAM
@@ -36,46 +37,19 @@ module top
   output  [1:0] sdram_dqm,// byte select
   inout  [15:0] sdram_d,  // data bus to/from SDRAM
 
-  input   [6:0] btn,
+  input   [1:0] btn,
 
-  input  usb_fpga_dp,
-  inout  usb_fpga_bd_dp,
-  inout  usb_fpga_bd_dn,
-  output usb_fpga_pu_dp,
-  output usb_fpga_pu_dn,
-
-  input  ftdi_txd,
-  output ftdi_rxd,
-
-  input  wifi_txd,
-  output wifi_rxd,
-  output wifi_gpio0,
-  input  wifi_gpio5,
-  input  wifi_gpio16,
-
-  inout  sd_clk, sd_cmd,
-  inout   [3:0] sd_d,
-
-  inout  [27:0] gp, gn,
+//  input  usb_fpga_dp,
+//  inout  usb_fpga_bd_dp,
+//  inout  usb_fpga_bd_dn,
+//  output usb_fpga_pu_dp,
+//  output usb_fpga_pu_dn,
 
   // DVI out
-  output  [3:0] gpdi_dp,
-  output  [3:0] audio_l, audio_r
+  output  [3:0] gpdi_dp
 );
-  wire  btn_start = ~btn[0];
-  wire  btn_b     =  btn[1];
-  wire  btn_a     =  btn[2];
-  wire  btn_up    =  btn[3];
-  wire  btn_down  =  btn[4];
-  wire  btn_left  =  btn[5];
-  wire  btn_right =  btn[6];
-
-  // passthru to ESP32 micropython serial console
-  assign wifi_rxd = ftdi_txd;
-  assign ftdi_rxd = wifi_txd;
-
-  assign sd_d[3] = 1'bz; // FPGA pin pullup sets SD card inactive at SPI bus
-  //assign sd_d[2] = 1'bz;
+  wire  btn_start =  btn[0];
+  wire  btn_a     =  btn[1];
 
   wire [3:0] dvi_usb_clocks;
   wire dvi_clock_locked;
@@ -170,47 +144,11 @@ module top
   end
   endgenerate
 
-  assign usb_fpga_pu_dp = 1'b0;
-  assign usb_fpga_pu_dn = 1'b0;
+ // assign usb_fpga_pu_dp = 1'b0;
+ // assign usb_fpga_pu_dn = 1'b0;
   wire [C_report_bytes*8-1:0] S_report;
   wire S_report_valid;
   wire [8:0] usb_buttons;
-  generate if (C_usb_speed >= 0) begin
-  usbh_host_hid
-  #(
-    .C_usb_speed(C_usb_speed), // '0':Low-speed '1':Full-speed
-    .C_report_length(C_report_bytes),
-    .C_report_length_strict(C_report_bytes_strict)
-  )
-  us2_hid_host_inst
-  (
-    .clk(clk_usb), // 6 MHz for low-speed USB1.0 device or 48 MHz for full-speed USB1.1 device
-    .bus_reset(~dvi_clock_locked),
-    .led(), // debug output
-    .usb_dif(usb_fpga_dp),
-    //.usb_dif(usb_fpga_bd_dp), // for trellis < 2020-03-08
-    .usb_dp(usb_fpga_bd_dp),
-    .usb_dn(usb_fpga_bd_dn),
-    .hid_report(S_report),
-    .hid_valid(S_report_valid)
-  );
-  
-  usbh_report_decoder
-  #(
-    .c_autofire_hz(C_autofire_hz)
-  )
-  usbh_report_decoder_inst
-  (
-    .i_clk(clk_usb),
-    .i_report(S_report),
-    .i_report_valid(S_report_valid),
-    .o_btn(usb_buttons)
-  );
-    assign led = usb_buttons[7:0];
-  end
-  else
-    assign led = {1'b0,btn};
-  endgenerate
 
   assign btn_reset = usb_buttons[8];
   wire sys_reset;
@@ -411,18 +349,18 @@ module top
   wire btn_select = 1'b0;
 
   reg last_joypad_clock;
-  reg [7:0] joypad_bits;
-  reg [7:0] buttons;
+  reg [1:0] joypad_bits;
+  reg [1:0] buttons;
 
-  reg [7:0] R_buttons;
+  reg [1:0] R_buttons;
   wire  joy_data, joy_strobe, joy_clock;
   generate
     if(use_external_nes_joypad)
     begin
-      assign gp[0] = 1'bz;
+      //assign gp[0] = 1'bz;
       assign joy_data = gp[0];
-      assign gp[1] = joy_strobe;
-      assign gp[2] = joy_clock;
+      //assign gp[1] = joy_strobe;
+      //assign gp[2] = joy_clock;
       always @(posedge clock)
       begin
         if (joy_strobe || (!joy_clock && last_joypad_clock) )
@@ -434,13 +372,13 @@ module top
     begin
       always @(posedge clock)
       begin
-        R_buttons <= {btn_right, btn_left, btn_down, btn_up, btn_start, btn_select, btn_b, btn_a};
+        R_buttons <= {btn_start, btn_a};
         if (joy_strobe)
           joypad_bits <= R_buttons | usb_buttons[7:0];
         else
         begin
           if (!joy_clock && last_joypad_clock)
-            joypad_bits <= {1'b0, joypad_bits[7:1]};
+            joypad_bits <= {1'b0, joypad_bits[1:0]};
         end
         last_joypad_clock <= joy_clock;
       end
@@ -503,120 +441,47 @@ module top
     .O_BLUE(b)
   );
 
-  wire [7:0] osd_vga_r, osd_vga_g, osd_vga_b;
-  wire osd_vga_hsync, osd_vga_vsync, osd_vga_blank;
-  spi_osd
-  #(
-    .c_start_x(62), .c_start_y(80),
-    .c_chars_x(64), .c_chars_y(20),
-    .c_init_on(0),
-    .c_transparency(C_osd_transparency),
-    .c_char_file("osd.mem"),
-    .c_font_file("font_bizcat8x16.mem")
-  )
-  spi_osd_inst
-  (
-    .clk_pixel(clk_pixel), .clk_pixel_ena(1),
-    .i_r(r), .i_g(g), .i_b(b),
-    .i_hsync(~vga_hs), .i_vsync(~vga_vs), .i_blank(blank),
-    .i_csn(~wifi_gpio5), .i_sclk(wifi_gpio16), .i_mosi(sd_d[1]), // .o_miso(),
-    .o_r(osd_vga_r), .o_g(osd_vga_g), .o_b(osd_vga_b),
-    .o_hsync(osd_vga_hsync), .o_vsync(osd_vga_vsync), .o_blank(osd_vga_blank)
-  );
-
-  // VGA to DAC registers
-  reg [3:0] vga_dac_r, vga_dac_g, vga_dac_b;
-  reg vga_dac_hsync, vga_dac_vsync;
-  always @(posedge clk_pixel)
-  begin
-    vga_dac_hsync <= osd_vga_hsync;
-    vga_dac_vsync <= osd_vga_vsync;
-    vga_dac_r     <= osd_vga_r[7:4];
-    vga_dac_g     <= osd_vga_g[7:4];
-    vga_dac_b     <= osd_vga_b[7:4];
-  end
-  // Output to VGA PMOD - UPPER LEFT
-  assign gn[0] = osd_vga_vsync;
-  assign gp[0] = osd_vga_hsync;
-  assign gn[1] = osd_vga_r[7];
-  assign gp[1] = osd_vga_r[6];
-  assign gn[2] = osd_vga_r[5];
-  assign gp[2] = osd_vga_g[7];
-  assign gn[3] = osd_vga_g[6];
-  assign gp[3] = osd_vga_g[5];
-  assign gn[4] = osd_vga_b[7];
-  assign gp[4] = osd_vga_b[6];
-  assign gn[5] = osd_vga_b[5];
-  assign gp[5] = osd_vga_r[4];
-  assign gn[6] = osd_vga_g[4];
-  assign gp[6] = osd_vga_b[4];
-
   // VGA to digital video converter
-  wire [1:0] tmds[3:0];
+  wire [1:0] tmds_clock, tmds_red, tmds_green, tmds_blue;
   vga2dvid
   #(
-    .C_ddr(1'b1),
-    .C_shift_clock_synchronizer(1'b0)
+    .c_ddr(c_ddr?1'b1:1'b0),
+    .c_shift_clock_synchronizer(1'b0)
   )
   vga2dvid_instance
   (
     .clk_pixel(clk_pixel),
     .clk_shift(clk_shift),
-    .in_red(osd_vga_r),
-    .in_green(osd_vga_g),
-    .in_blue(osd_vga_b),
-    .in_hsync(osd_vga_hsync),
-    .in_vsync(osd_vga_vsync),
-    .in_blank(osd_vga_blank),
-    .out_clock(tmds[3]),
-    .out_red(tmds[2]),
-    .out_green(tmds[1]),
-    .out_blue(tmds[0])
+    .in_red(r),
+    .in_green(g),
+    .in_blue(b),
+    .in_hsync(vga_hs),
+    .in_vsync(vga_vs),
+    .in_blank(blank),
+    .out_clock(tmds_clock),
+    .out_red  (tmds_red  ),
+    .out_green(tmds_green),
+    .out_blue (tmds_blue )
   );
 
-  // vendor specific DDR modules
-  // convert SDR 2-bit input to DDR clocked 1-bit output (single-ended)
-  ODDRX1F ddr_clock (.D0(tmds[3][0]), .D1(tmds[3][1]), .Q(gpdi_dp[3]), .SCLK(clk_shift), .RST(0));
-  ODDRX1F ddr_red   (.D0(tmds[2][0]), .D1(tmds[2][1]), .Q(gpdi_dp[2]), .SCLK(clk_shift), .RST(0));
-  ODDRX1F ddr_green (.D0(tmds[1][0]), .D1(tmds[1][1]), .Q(gpdi_dp[1]), .SCLK(clk_shift), .RST(0));
-  ODDRX1F ddr_blue  (.D0(tmds[0][0]), .D1(tmds[0][1]), .Q(gpdi_dp[0]), .SCLK(clk_shift), .RST(0));
-
-  wire [3:0] audio;
   generate
-    if(C_audio==0)
-      assign audio = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
-    if(C_audio==1)
+    if(c_ddr)
     begin
-      wire dac1bit;
-      sigma_delta_dac
-      sigma_delta_dac_instance
-      (
-        .CLK(clock),
-        .RESET(reset_nes),
-        .DACin(sample),
-        .DACout(dac1bit)
-      );
-      assign audio = {4{dac1bit}};
+      // vendor specific DDR modules
+      // convert SDR 2-bit input to DDR clocked 1-bit output (single-ended)
+      // onboard GPDI
+      ODDRX1F ddr0_clock (.D0(tmds_clock[0]), .D1(tmds_clock[1]), .Q(gpdi_dp[3]), .SCLK(clk_shift), .RST(0));
+      ODDRX1F ddr0_red   (.D0(tmds_red  [0]), .D1(tmds_red  [1]), .Q(gpdi_dp[2]), .SCLK(clk_shift), .RST(0));
+      ODDRX1F ddr0_green (.D0(tmds_green[0]), .D1(tmds_green[1]), .Q(gpdi_dp[1]), .SCLK(clk_shift), .RST(0));
+      ODDRX1F ddr0_blue  (.D0(tmds_blue [0]), .D1(tmds_blue [1]), .Q(gpdi_dp[0]), .SCLK(clk_shift), .RST(0));
     end
-    if(C_audio==2)
+    else
     begin
-      wire dac1bit;
-      sigma_delta_dac
-      #(
-        .MSBI(11)
-      )
-      sigma_delta_dac_instance
-      (
-        .CLK(clock),
-        .RESET(reset_nes),
-        .DACin(sample[11:0]),
-        .DACout(dac1bit)
-      );
-      wire [$bits(audio)-1:0] dac0 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
-      wire [$bits(audio)-1:0] dac1 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)] + 1;
-      assign audio = dac1bit ? dac1 : dac0;
+      assign gpdi_dp[3] = tmds_clock[0];
+      assign gpdi_dp[2] = tmds_red  [0];
+      assign gpdi_dp[1] = tmds_green[0];
+      assign gpdi_dp[0] = tmds_blue [0];
     end
   endgenerate
-  assign audio_l = audio;
-  assign audio_r = audio;
+
 endmodule
