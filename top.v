@@ -2,14 +2,14 @@
 module top
 #(
   parameter use_external_nes_joypad=0,
-  parameter C_audio=2, // 0: direct MSB 4->4 bit DAC, 1: 16->1 bit PWM-DAC, 2: 16->4 bit PWM-DAC
-  parameter C_usb_speed=-1,  // 0:6 MHz USB1.0, 1:48 MHz USB1.1, -1: USB disabled,
-  //xbox360 : C_report_bytes=20, C_report_bytes_strict=1
+  parameter C_audio=1, // 0: direct MSB 4->4 bit DAC, 1: 16->1 bit PWM-DAC, 2: 16->4 bit PWM-DAC
+  parameter C_usb_speed=1,  // 0:6 MHz USB1.0, 1:48 MHz USB1.1, -1: USB disabled,
+  // xbox360 : C_report_bytes=20, C_report_bytes_strict=1
   // darfon  : C_report_bytes= 8, C_report_bytes_strict=1
   parameter C_report_bytes=20, // 8:usual joystick, 20:xbox360
   parameter C_report_bytes_strict=1, // 0:when report length is variable/unknown
   parameter C_autofire_hz=10, // joystick trigger and bumper
-  parameter C_osd_usb=0, // 0:OSD onboard BTN's, 1:OSD USB joystick, 2:both
+  parameter C_osd_usb=2, // 0:OSD onboard BTN's, 1:OSD USB joystick, 2:both
   parameter C_osd_transparency=1, // 0:opaque 1:transparent OSD menu
   // choose one: C_flash_loader or C_esp32_loader
   parameter C_flash_loader=1, // fujprog -j flash -f 0x200000 100in1.img
@@ -39,17 +39,20 @@ module top
 
   input   [1:0] btn,
 
-//  input  usb_fpga_dp,
-//  inout  usb_fpga_bd_dp,
-//  inout  usb_fpga_bd_dn,
-//  output usb_fpga_pu_dp,
-//  output usb_fpga_pu_dn,
+  input  usb_fpga_dp,
+  inout  usb_fpga_bd_dp,
+  inout  usb_fpga_bd_dn,
+  output usb_fpga_pu_dp,
+  output usb_fpga_pu_dn,
+  output usb_fpga_otg_id,
 
   // DVI out
-  output  [3:0] gpdi_dp
+  output  [3:0] gpdi_dp,
+  // GPIO for audio
+  output [12:4]  gpio
 );
-  wire  btn_start =  btn[1];
-  wire  btn_a     =  btn[2];
+  wire  btn_start =  btn[0];
+  wire  btn_a     =  btn[1];
 
   wire [3:0] dvi_usb_clocks;
   wire dvi_clock_locked;
@@ -144,13 +147,52 @@ module top
   end
   endgenerate
 
- // assign usb_fpga_pu_dp = 1'b0;
- // assign usb_fpga_pu_dn = 1'b0;
+  assign usb_fpga_pu_dp = 1'b0;
+  assign usb_fpga_pu_dn = 1'b0;
+  assign usb_fpga_otg_id = 1'b0;
+
   wire [C_report_bytes*8-1:0] S_report;
   wire S_report_valid;
   wire [8:0] usb_buttons;
 
-  assign btn_reset = btn[0]; //usb_buttons[8];
+  generate if (C_usb_speed >= 0) begin
+  usbh_host_hid
+  #(
+    .C_usb_speed(C_usb_speed), // '0':Low-speed '1':Full-speed
+    .C_report_length(C_report_bytes),
+    .C_report_length_strict(C_report_bytes_strict)
+  )
+  us2_hid_host_inst
+  (
+    .clk(clk_usb), // 6 MHz for low-speed USB1.0 device or 48 MHz for full-speed USB1.1 device
+    .bus_reset(~dvi_clock_locked),
+    .led(), // debug output
+    .usb_dif(usb_fpga_dp),
+    //.usb_dif(usb_fpga_bd_dp), // for trellis < 2020-03-08
+    .usb_dp(usb_fpga_bd_dp),
+    .usb_dn(usb_fpga_bd_dn),
+    .hid_report(S_report),
+    .hid_valid(S_report_valid)
+  );
+
+  usbh_report_decoder
+  #(
+    .c_autofire_hz(C_autofire_hz)
+  )
+  usbh_report_decoder_inst
+  (
+    .i_clk(clk_usb),
+    .i_report(S_report),
+    .i_report_valid(S_report_valid),
+    .o_btn(usb_buttons)
+  );
+    assign led = usb_buttons[7:0];
+  end
+  else
+    assign led = {1'b0,btn};
+  endgenerate
+
+  assign btn_reset = usb_buttons[8];
   wire sys_reset;
 
   generate
@@ -483,5 +525,48 @@ module top
       assign gpdi_dp[0] = tmds_blue [0];
     end
   endgenerate
+
+  wire [3:0] audio;
+  generate
+    if(C_audio==0)
+      assign audio = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
+    if(C_audio==1)
+    begin
+      wire dac1bit;
+      sigma_delta_dac
+      sigma_delta_dac_instance
+      (
+        .CLK(clock),
+        .RESET(reset_nes),
+        .DACin(sample),
+        .DACout(dac1bit)
+      );
+      assign audio = {4{dac1bit}};
+      // Digilent PmodAMP2
+      assign gpio[12] = 1'b0; // gain
+      assign gpio[6] = 1'b1; // shutdown
+      assign gpio[4] = dac1bit;
+    end
+    if(C_audio==2)
+    begin
+      wire dac1bit;
+      sigma_delta_dac
+      #(
+        .MSBI(11)
+      )
+      sigma_delta_dac_instance
+      (
+        .CLK(clock),
+        .RESET(reset_nes),
+        .DACin(sample[11:0]),
+        .DACout(dac1bit)
+      );
+      wire [$bits(audio)-1:0] dac0 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
+      wire [$bits(audio)-1:0] dac1 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)] + 1;
+      assign audio = dac1bit ? dac1 : dac0;
+    end
+
+  endgenerate
+
 
 endmodule

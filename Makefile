@@ -24,7 +24,7 @@ endif
 IDCODE ?= $(CHIP_ID)
 
 YOSYS           ?= yosys
-YOSYS_OPTIONS   ?= 
+YOSYS_OPTIONS   ?= -abc2
 NEXTPNR-ECP5    ?= nextpnr-ecp5
 NEXTPNR_OPTIONS ?= --timing-allow-fail --router router2
 ECPPACK         ?= ecppack
@@ -72,17 +72,17 @@ VERILOG_FILES += tmds_encoder.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_nes.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_saitek.v
 #VERILOG_FILES += usb/report_decoder/usbh_report_decoder_radiona.v
-#VERILOG_FILES += usb/report_decoder/usbh_report_decoder_xbox360.v
+VERILOG_FILES += usb/report_decoder/usbh_report_decoder_xbox360.v
 # for xbox360 also edit top.v C_usb_speed=1, C_report_bytes=20
 
-#VERILOG_FILES += usb/usbhost/usbh_crc16.v
-#VERILOG_FILES += usb/usbhost/usbh_crc5.v
-#VERILOG_FILES += usb/usbhost/usbh_host_hid.v
-#VERILOG_FILES += usb/usbhost/usbh_sie.v
+VERILOG_FILES += usb/usbhost/usbh_crc16.v
+VERILOG_FILES += usb/usbhost/usbh_crc5.v
+VERILOG_FILES += usb/usbhost/usbh_host_hid.v
+VERILOG_FILES += usb/usbhost/usbh_sie.v
 
-#VERILOG_FILES += usb/usb11_phy_vhdl/usb_phy.v
-#VERILOG_FILES += usb/usb11_phy_vhdl/usb_rx_phy.v
-#VERILOG_FILES += usb/usb11_phy_vhdl/usb_tx_phy.v
+VERILOG_FILES += usb/usb11_phy_vhdl/usb_phy.v
+VERILOG_FILES += usb/usb11_phy_vhdl/usb_rx_phy.v
+VERILOG_FILES += usb/usb11_phy_vhdl/usb_tx_phy.v
 
 VHDL_FILES  = t65/T65_Pack.vhd
 VHDL_FILES += t65/T65_MCode.vhd
