@@ -569,20 +569,43 @@ module top
 
   endgenerate
 
-      // Set the GPIO pins
-    assign gpio[0] = clk_pixel;
-    assign gpio[1] = ~blank; // de
-    assign gpio[2] = vga_vs;
-    assign gpio[3] = vga_hs;
+  wire blank2;
+  wire [7:0] r2;
+  wire [7:0] g2;
+  wire [7:0] b2;
+  wire vga_vs2;
+  wire vga_hs2;
 
-    assign gpio[27] = 1'b1;
-    assign gpio[26] = 1'b1;
-    assign gpio[11] = 1'b1;
-    assign gpio[10] = 1'b1;
+  vga2
+  vga_i2
+  (
+    .I_CLK(clock),
+    .I_CLK_VGA(clk_pixel),
+    .I_COLOR(color),
+    .I_HCNT(cycle),
+    .I_VCNT(scanline),
+    .O_HSYNC(vga_hs2),
+    .O_VSYNC(vga_vs2),
+    .O_BLANK(blank2),
+    .O_RED(r2),
+    .O_GREEN(g2),
+    .O_BLUE(b2)
+  );
 
-    assign {gpio[25], gpio[24], gpio[23], gpio[22], gpio[21], gpio[20]} = r[7:2];
-    assign {gpio[17], gpio[16], gpio[15], gpio[14], gpio[13], gpio[12]} = g[7:2];
-    assign {gpio[9],  gpio[8],  gpio[7],  gpio[6],  gpio[5],  gpio[4]}  = b[7:2];
+  // Set the GPIO pins
+  assign gpio[0] = clk_pixel;
+  assign gpio[1] = ~blank2; // de
+  assign gpio[2] = vga_vs2;
+  assign gpio[3] = vga_hs2;
+
+  assign gpio[27] = 1'b1;
+  assign gpio[26] = 1'b1;
+  assign gpio[11] = 1'b1;
+  assign gpio[10] = 1'b1;
+
+  assign {gpio[25], gpio[24], gpio[23], gpio[22], gpio[21], gpio[20]} = r2[7:2];
+  assign {gpio[17], gpio[16], gpio[15], gpio[14], gpio[13], gpio[12]} = g2[7:2];
+  assign {gpio[9],  gpio[8],  gpio[7],  gpio[6],  gpio[5],  gpio[4]}  = b2[7:2];
 
 
 endmodule

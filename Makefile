@@ -56,6 +56,7 @@ VERILOG_FILES += game_loader.v
 VERILOG_FILES += flash_loader.v
 VERILOG_FILES += palette_ram.v
 VERILOG_FILES += vga.v
+VERILOG_FILES += vga2.v
 VERILOG_FILES += framebuffer.v
 VERILOG_FILES += sigma_delta_dac.v
 VERILOG_FILES += vga2dvid.v
