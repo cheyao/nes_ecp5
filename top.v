@@ -49,7 +49,7 @@ module top
   // DVI out
   output  [3:0] gpdi_dp,
   // GPIO for audio
-  output [12:4]  gpio
+  output [27:0]  gpio
 );
   wire  btn_start =  btn[0];
   wire  btn_a     =  btn[1];
@@ -543,9 +543,10 @@ module top
       );
       assign audio = {4{dac1bit}};
       // Digilent PmodAMP2
-      assign gpio[12] = 1'b0; // gain
-      assign gpio[6] = 1'b1; // shutdown
-      assign gpio[4] = dac1bit;
+      //assign gpio[12] = 1'b0; // gain
+      //assign gpio[6] = 1'b1; // shutdown
+      assign gpio[18] = dac1bit;
+      assign gpio[19] = dac1bit;
     end
     if(C_audio==2)
     begin
@@ -567,6 +568,21 @@ module top
     end
 
   endgenerate
+
+      // Set the GPIO pins
+    assign gpio[0] = clk_pixel;
+    assign gpio[1] = ~blank; // de
+    assign gpio[2] = vga_vs;
+    assign gpio[3] = vga_hs;
+
+    assign gpio[27] = 1'b1;
+    assign gpio[26] = 1'b1;
+    assign gpio[11] = 1'b1;
+    assign gpio[10] = 1'b1;
+
+    assign {gpio[25], gpio[24], gpio[23], gpio[22], gpio[21], gpio[20]} = r[7:2];
+    assign {gpio[17], gpio[16], gpio[15], gpio[14], gpio[13], gpio[12]} = g[7:2];
+    assign {gpio[9],  gpio[8],  gpio[7],  gpio[6],  gpio[5],  gpio[4]}  = b[7:2];
 
 
 endmodule
