@@ -45,6 +45,7 @@ module top
   output usb_fpga_pu_dp,
   output usb_fpga_pu_dn,
   output usb_fpga_otg_id,
+  output n_extrst,
 
   // DVI out
   output  [3:0] gpdi_dp,
@@ -149,7 +150,8 @@ module top
 
   assign usb_fpga_pu_dp = 1'b0;
   assign usb_fpga_pu_dn = 1'b0;
-  assign usb_fpga_otg_id = 1'b0;
+  assign usb_fpga_otg_id = 1'b1;
+  assign n_extrst = 1'b1;
 
   wire [C_report_bytes*8-1:0] S_report;
   wire S_report_valid;
@@ -391,7 +393,7 @@ module top
   wire btn_select = 1'b0;
 
   reg last_joypad_clock;
-  reg [1:0] joypad_bits;
+  reg [7:0] joypad_bits;
   reg [1:0] buttons;
 
   reg [1:0] R_buttons;
