@@ -422,7 +422,7 @@ module top
         else
         begin
           if (!joy_clock && last_joypad_clock)
-            joypad_bits <= {1'b0, joypad_bits[1:0]};
+            joypad_bits <= {1'b0, joypad_bits[7:1]};
         end
         last_joypad_clock <= joy_clock;
       end
