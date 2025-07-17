@@ -17,7 +17,7 @@ module top
   parameter c_ddr    =  1  // 0:SDR 1:DDR
 )
 (
-  input  clk_25mhz,
+  input  clk,
   output flash_csn,
   output flash_mosi,
   output flash_wpn,
@@ -39,19 +39,23 @@ module top
 
   input   [1:0] btn,
 
-  input  usb_fpga_dp,
+  // input  usb_fpga_dp,
   inout  usb_fpga_bd_dp,
   inout  usb_fpga_bd_dn,
   output usb_fpga_pu_dp,
   output usb_fpga_pu_dn,
-  output usb_fpga_otg_id,
-  output n_extrst,
+  // output usb_fpga_otg_id,
+  // output n_extrst,
 
   // DVI out
   output  [3:0] gpdi_dp,
   // GPIO for audio
   output [27:0]  gpio
 );
+  reg clk_25mhz;
+  always @(posedge clk) begin
+      clk_25mhz = ~clk_25mhz;
+  end
   wire  btn_start =  btn[0];
   wire  btn_a     =  btn[1];
 
@@ -82,7 +86,7 @@ module top
   #(
       .in_hz( 25*1000000),
     .out0_hz(   85714285), // 4*25*6/7 MHz
-    .out1_hz(   85714285), .out1_deg(270), // 0-45 ok, 90 fail, 150-359 ok
+    .out1_hz(   85714285), .out1_deg(190), // 0-45 ok, 90 fail, 150-359 ok
     .out2_hz(   21428571), //   25*6/7 MHz
     .out3_hz(   21428571)  // not used
   )
@@ -150,8 +154,8 @@ module top
 
   assign usb_fpga_pu_dp = 1'b0;
   assign usb_fpga_pu_dn = 1'b0;
-  assign usb_fpga_otg_id = 1'b1;
-  assign n_extrst = 1'b1;
+  // assign usb_fpga_otg_id = 1'b1;
+  // assign n_extrst = 1'b1;
 
   wire [C_report_bytes*8-1:0] S_report;
   wire S_report_valid;
@@ -169,8 +173,8 @@ module top
     .clk(clk_usb), // 6 MHz for low-speed USB1.0 device or 48 MHz for full-speed USB1.1 device
     .bus_reset(~dvi_clock_locked),
     .led(), // debug output
-    .usb_dif(usb_fpga_dp),
-    //.usb_dif(usb_fpga_bd_dp), // for trellis < 2020-03-08
+    //.usb_dif(usb_fpga_dp),
+    .usb_dif(usb_fpga_bd_dp), // for trellis < 2020-03-08
     .usb_dp(usb_fpga_bd_dp),
     .usb_dn(usb_fpga_bd_dn),
     .hid_report(S_report),
@@ -194,7 +198,7 @@ module top
     assign led = {1'b0,btn};
   endgenerate
 
-  assign btn_reset = usb_buttons[8];
+  assign btn_reset = usb_buttons[8] | (~btn[0] & ~btn[1]);
   wire sys_reset;
 
   generate

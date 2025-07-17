@@ -1,7 +1,7 @@
 PROJ=nes
 FPGA_PREFIX ?=
 #FPGA_PREFIX ?= um5g-
-FPGA_SIZE ?= um-45
+FPGA_SIZE ?= 25
 
 FPGA_KS ?= $(FPGA_PREFIX)$(FPGA_SIZE)k
 
@@ -90,8 +90,8 @@ VHDL_FILES += t65/T65_MCode.vhd
 VHDL_FILES += t65/T65_ALU.vhd
 VHDL_FILES += t65/T65.vhd
 
-#GHDL_MODULE = -mghdl
-GHDL_MODULE =
+GHDL_MODULE = -mghdl
+#GHDL_MODULE =
 
 %.json: ${VERILOG_FILES} ${VHDL_FILES}
 	$(YOSYS) $(GHDL_MODULE) -m ghdl -q -l synth.log \
@@ -101,19 +101,19 @@ GHDL_MODULE =
 	-p "synth_ecp5 ${YOSYS_OPTIONS} -json $@"
 
 %_out.config: %.json
-	$(NEXTPNR-ECP5) $(NEXTPNR_OPTIONS) --json  $< --textcfg $@ --$(FPGA_KS) --freq 21 --package CABGA381 --lpf ulx4m_v002.lpf
+	$(NEXTPNR-ECP5) $(NEXTPNR_OPTIONS) --json  $< --textcfg $@ --$(FPGA_KS) --freq 21 --package CABGA256 --lpf icepi-zero.lpf
 
 %.bit: %_out.config
 	LANG=C $(ECPPACK) --freq 62.0 --compress --idcode $(IDCODE) $< $@
 
 prog: ${PROJ}.bit
-	fujprog $<
+	openFPGALoader -b icepi-zero $<
 
 prog_flash: ${PROJ}.bit
-	fujprog -j FLASH $<
+	openFPGALoader -b icepi-zero --write-flash $<
 
 prog_game: rom/game_tilt.img
-	fujprog -j FLASH -f 0x200000 $<
+	openFPGALoader -b icepi-zero --write-flash -o 0x400000 $<
 
 clean:
 	rm -f *.bit *.config *.json
