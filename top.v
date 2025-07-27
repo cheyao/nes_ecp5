@@ -119,7 +119,7 @@ module top
     clock_locked <= sys_sdram_clocks_locked;
 
   // assign led[4] = user_reset;
-  assign led[3:0] = sdram_a[3:0];
+  //assign led[3:0] = sdram_a[3:0];
 
   // prevent crosstalk at flash unused lines
   assign flash_wpn = 1;
@@ -320,17 +320,14 @@ module top
 
    // cpu/chipset interface
    .addrA     	   (!load_done ? {3'b000, loader_addr_mem} : {3'b000, memory_addr_cpu}),
-   .addrB          ({3'b000, memory_addr_ppu} ),
-
    .weA            (!load_done ?  loader_write_mem : memory_write_cpu),
-   .weB            (memory_write_ppu),
-
    .dinA           (!load_done ? loader_write_data_mem : memory_dout_cpu),
-   .dinB           (memory_dout_ppu),
-
    .oeA            (memory_read_cpu),
    .doutA          (memory_din_cpu ),
 
+   .addrB          ({3'b000, memory_addr_ppu} ),
+   .weB            (memory_write_ppu),
+   .dinB           (memory_dout_ppu),
    .oeB            (memory_read_ppu),
    .doutB          (memory_din_ppu )
   );

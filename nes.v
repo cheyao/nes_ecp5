@@ -74,7 +74,7 @@ module NES(
 	input         clk,
 	input         reset_nes,
 	input   [1:0] sys_type,
-	output  [2:0] nes_div,
+	output  [1:0] nes_div,
 	input  [31:0] mapper_flags,
 	output [15:0] sample,         // sample generated from APU
 	output  [5:0] color,          // pixel generated from PPU
