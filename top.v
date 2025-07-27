@@ -9,11 +9,6 @@ module top
   parameter C_report_bytes=20, // 8:usual joystick, 20:xbox360
   parameter C_report_bytes_strict=1, // 0:when report length is variable/unknown
   parameter C_autofire_hz=10, // joystick trigger and bumper
-  parameter C_osd_usb=2, // 0:OSD onboard BTN's, 1:OSD USB joystick, 2:both
-  parameter C_osd_transparency=1, // 0:opaque 1:transparent OSD menu
-  // choose one: C_flash_loader or C_esp32_loader
-  parameter C_flash_loader=1, // fujprog -j flash -f 0x200000 100in1.img
-  parameter C_esp32_loader=0, // usage: import nes # for OSD press together A B SELECT START or all 4 directions
   parameter c_ddr    =  1  // 0:SDR 1:DDR
 )
 (
@@ -24,7 +19,7 @@ module top
   output flash_holdn,
   input  flash_miso,
 
-  output [3:0]  led,
+  output [4:0]  led,
 
   output sdram_csn,       // chip select
   output sdram_clk,       // clock to SDRAM
@@ -44,26 +39,22 @@ module top
   inout  usb_fpga_bd_dn,
   output usb_fpga_pu_dp,
   output usb_fpga_pu_dn,
-  // output usb_fpga_otg_id,
-  // output n_extrst,
 
   // DVI out
   output  [3:0] gpdi_dp,
   // GPIO for audio
-  output [27:0]  gpio
+  input [27:0]  gpio
 );
-  reg clk_25mhz;
-  always @(posedge clk) begin
-      clk_25mhz = ~clk_25mhz;
-  end
-  wire  btn_start =  btn[0];
-  wire  btn_a     =  btn[1];
+  wire  btn_start =  0;//btn[0];
+  wire  btn_a     =  0;//btn[1];
+  wire  user_reset;
+  debouncer reset_btn(.clk(clk), .btn(~btn[1] | ~btn[0]), .sig(user_reset));
 
   wire [3:0] dvi_usb_clocks;
   wire dvi_clock_locked;
   ecp5pll
   #(
-      .in_hz( 25*1000000),
+      .in_hz( 50*1000000),
     .out0_hz(125*1000000),
     .out1_hz( 48*1000000), .out1_tol_hz(100000),
     .out2_hz(  6*1000000), .out2_tol_hz( 10000),
@@ -71,30 +62,54 @@ module top
   )
   clk_dvi_usb_inst
   (
-    .clk_i(clk_25mhz),
+    .clk_i(clk),
     .clk_o(dvi_usb_clocks),
     .locked(dvi_clock_locked)
   );
   wire clk_shift = dvi_usb_clocks[0];
-  wire clk_pixel = dvi_usb_clocks[3];
   wire clk_48MHz = dvi_usb_clocks[1]; // USB1.1
   wire clk_6MHz  = dvi_usb_clocks[2]; // USB1.0
+  wire clk_pixel = dvi_usb_clocks[3];
+
+    wire S_phasedir;
+    wire S_phasestep;
+    wire S_phaseloadreg;
+
+    wire [7:0] S_phase;
+    btn_ecp5pll_phase
+    #(
+      .c_debounce_bits(16)
+    )
+    btn_ecp5pll_phase_inst
+    (
+      .clk(clk),
+      .inc(~btn[1]),
+      .dec(~btn[0]),
+      .phase(S_phase),
+      .phasedir(S_phasedir),
+      .phasestep(S_phasestep),
+      .phaseloadreg(S_phaseloadreg)
+    );
 
   wire [3:0] sys_sdram_clocks;
   wire sys_sdram_clocks_locked;
   ecp5pll
   #(
-      .in_hz( 25*1000000),
+      .in_hz( 50*1000000),
     .out0_hz(   85714285), // 4*25*6/7 MHz
-    .out1_hz(   85714285), .out1_deg(190), // 0-45 ok, 90 fail, 150-359 ok
+    .out1_hz(   85714285), .out1_deg(070), // 0-45 ok, 90 fail, 150-359 ok
     .out2_hz(   21428571), //   25*6/7 MHz
     .out3_hz(   21428571)  // not used
   )
   clk_sdram_sys_inst
   (
-    .clk_i(clk_25mhz),
+    .clk_i(clk),
     .clk_o(sys_sdram_clocks),
-    .locked(sys_sdram_clocks_locked)
+    .locked(sys_sdram_clocks_locked),
+    //.phasesel(2'd1), // select out1
+    //.phasedir(S_phasedir),
+    //.phasestep(S_phasestep),
+    //.phaseloadreg(S_phaseloadreg)
   );
   wire clock_sdram_core = sys_sdram_clocks[0];
   wire clock_sdram_chip = sys_sdram_clocks[1];
@@ -102,6 +117,9 @@ module top
   reg clock_locked;
   always @(posedge clock)
     clock_locked <= sys_sdram_clocks_locked;
+
+  // assign led[4] = user_reset;
+  assign led[3:0] = sdram_a[3:0];
 
   // prevent crosstalk at flash unused lines
   assign flash_wpn = 1;
@@ -161,15 +179,13 @@ module top
   wire S_report_valid;
   wire [8:0] usb_buttons;
 
+  // Generate USB stuff
   generate if (C_usb_speed >= 0) begin
-  usbh_host_hid
-  #(
+  usbh_host_hid #(
     .C_usb_speed(C_usb_speed), // '0':Low-speed '1':Full-speed
     .C_report_length(C_report_bytes),
     .C_report_length_strict(C_report_bytes_strict)
-  )
-  us2_hid_host_inst
-  (
+  ) us2_hid_host_inst (
     .clk(clk_usb), // 6 MHz for low-speed USB1.0 device or 48 MHz for full-speed USB1.1 device
     .bus_reset(~dvi_clock_locked),
     .led(), // debug output
@@ -181,121 +197,38 @@ module top
     .hid_valid(S_report_valid)
   );
 
-  usbh_report_decoder
-  #(
+  usbh_report_decoder #(
     .c_autofire_hz(C_autofire_hz)
-  )
-  usbh_report_decoder_inst
-  (
+  ) usbh_report_decoder_inst (
     .i_clk(clk_usb),
     .i_report(S_report),
     .i_report_valid(S_report_valid),
     .o_btn(usb_buttons)
   );
-    assign led = usb_buttons[7:0];
+    // assign led = usb_buttons[7:0] | gpio[7:0];
   end
-  else
-    assign led = {1'b0,btn};
+  //else
+    // assign led = {1'b0,btn};
   endgenerate
 
-  assign btn_reset = usb_buttons[8] | (~btn[0] & ~btn[1]);
+  assign btn_reset = usb_buttons[8] | user_reset;
   wire sys_reset;
 
-  generate
-  if(C_flash_loader)
-  begin
-  flash_loader
-  flash_load_i
-  (
+  flash_loader flash_load_i (
     .clock(clock),
     .reset(sys_reset),
-    .reload(1'b0),
-    .index({4'b0000}),
     .load_write_data(flash_loader_data_out),
     .data_valid(flash_loader_data_ready),
-    //Flash load interface
+
+    // Flash load interface
     .flash_csn(flash_csn),
     .flash_sck(flash_sck),
     .flash_mosi(flash_mosi),
     .flash_miso(flash_miso)
   );
   assign sys_reset = R_reset[23];
-  end
-  if(C_esp32_loader)
-  begin
-    reg [7:0] R_btn_joy;
-    if(C_osd_usb==0)
-      always @(posedge clock)
-        R_btn_joy <= {1'b0, btn};
-    if(C_osd_usb==1)
-      always @(posedge clock)
-        R_btn_joy <=
-        {
-            usb_buttons[8], //   reset
-            usb_buttons[7], // 6 right
-            usb_buttons[6], // 5 left
-            usb_buttons[5], // 4 down
-            usb_buttons[4], // 3 up
-            1'b0,           // 2 B
-            1'b0,           // 1 A
-            1'b1            // 0 start
-        };
-    if(C_osd_usb==2)
-      always @(posedge clock)
-        R_btn_joy <= {1'b0, btn} |
-        {
-            usb_buttons[8], //   reset
-            usb_buttons[7], // 6 right
-            usb_buttons[6], // 5 left
-            usb_buttons[5], // 4 down
-            usb_buttons[4], // 3 up
-            1'b0,           // 2 B
-            1'b0,           // 1 A
-            1'b1            // 0 start
-        };
-    wire [31:0] spi_ram_addr;
-    wire spi_rd;
-    reg  [7:0] R_spi_data_in;
-    wire spi_wr;
-    reg R_spi_wr;
-    wire irq;
-    spi_ram_btn
-    #(
-      .c_addr_bits($bits(spi_ram_addr)),
-      .c_sclk_capable_pin(1'b0)
-    )
-    spi_ram_btn_inst
-    (
-      .clk(clock),
-      .csn(~wifi_gpio5),
-      .sclk(wifi_gpio16),
-      .mosi(sd_d[1]), // wifi_gpio4
-      .miso(sd_d[2]), // wifi_gpio12
-      .btn(R_btn_joy),
-      .irq(irq),
-      .rd(spi_rd),
-      .wr(spi_wr),
-      .addr(spi_ram_addr),
-      .data_in(R_spi_data_in), // R_spi_data_in used to read BTN state
-      .data_out(flash_loader_data_out)
-    );
-    assign wifi_gpio0 = ~irq;
 
-    reg [7:0] R_cpu_control;
-    always @(posedge clock) begin
-      R_spi_wr <= spi_wr;
-      if (spi_wr && spi_ram_addr[31:24] == 8'hFF) begin
-        R_cpu_control <= flash_loader_data_out;
-      end
-    end
-    assign sys_reset = R_cpu_control[0];
-    wire flash_loader_data_ready = spi_wr & ~R_spi_wr;
-  end
-  endgenerate
-
-  game_loader
-  game_loader_i
-  (
+  game_loader game_loader_i (
     .clk(clock),
     .reset(sys_reset),
     .indata(flash_loader_data_out),
@@ -304,8 +237,16 @@ module top
     .mem_data(game_loader_mem),
     .mem_write(loader_write),
     .mapper_flags(mapper_flags),
-    .done(load_done)
+    .done(load_done),
+    .error(led[4]) // The last led will turn on if error loading game
   );
+
+  reg loader_write_triggered = 1'b0;
+  reg [7:0] loader_write_data_mem;
+  reg [21:0] loader_addr_mem;
+  reg loader_write_mem = 1'b0;
+
+  wire [1:0] nes_ce;
 
   // loader_write -> clock when data available
   always @(posedge clock) begin
@@ -340,21 +281,26 @@ module top
     if(downloading) init_reset <= 1'b0;
   end
 
+// `define SDRAM_MIST
+
+`ifndef SDRAM_MIST
   wire [15:0] sd_data_in;
   wire [15:0] sd_data_out;
   assign sdram_d = (!load_done ? !loader_write_mem : !memory_write) ? 16'hzzzz : sd_data_out;
   assign sd_data_in = sdram_d;
+`endif
 
-  reg loader_write_triggered = 1'b0;
-  reg [7:0] loader_write_data_mem;
-  reg [21:0] loader_addr_mem;
-  reg loader_write_mem = 1'b0;
+  // Always enable clock
+  assign sdram_cke = 1'b1;
+  assign sdram_clk = clock_sdram_chip; // Our shifted clock signal
 
-  sdram
-  sdram_i
-  (
+  sdram sdram_i (
+`ifdef SDRAM_MIST
+   .SDRAM_DQ(sdram_d),
+`else
    .sd_data_in(sd_data_in),
    .sd_data_out(sd_data_out),
+`endif
    .sd_addr(sdram_a),
    .sd_dqm({sdram_dqm[1], sdram_dqm[0]}),
    .sd_cs(sdram_csn),
@@ -365,8 +311,13 @@ module top
    // system interface
    .clk(clock_sdram_core),
    .clkref(nes_ce[1]),
+`ifdef SDRAM_MIST
+   .init_n(clock_locked),
+`else
    .init(!clock_locked),
    .we_out(memory_write),
+`endif
+
    // cpu/chipset interface
    .addrA     	   (!load_done ? {3'b000, loader_addr_mem} : {3'b000, memory_addr_cpu}),
    .addrB          ({3'b000, memory_addr_ppu} ),
@@ -384,13 +335,9 @@ module top
    .doutB          (memory_din_ppu )
   );
 
-  assign sdram_cke = 1'b1;
-  assign sdram_clk = clock_sdram_chip;
-
   reg reset_nes = 0;
   always @(posedge clock)
     reset_nes <= (!load_done || init_reset || download_reset || sys_reset);
-  wire [1:0] nes_ce;
 
   // select button is not functional
   // as we don't have any onboard buttons left on the board
@@ -422,7 +369,7 @@ module top
       begin
         R_buttons <= {btn_start, btn_a};
         if (joy_strobe)
-          joypad_bits <= R_buttons | usb_buttons[7:0];
+          joypad_bits <= R_buttons | usb_buttons[7:0] | gpio[7:0];
         else
         begin
           if (!joy_clock && last_joypad_clock)
@@ -436,9 +383,7 @@ module top
   wire [31:0] dbgadr;
   wire [2:0] dbgctr;
 
-  NES
-  nes_i
-  (
+  NES nes_i (
    .clk(clock),
    .reset_nes(reset_nes),
    .sys_type(2'b00),
@@ -473,9 +418,7 @@ module top
   wire vga_vs;
   wire vga_hs;
 
-  vga
-  vga_i
-  (
+  vga vga_i (
     .I_CLK(clock),
     .I_CLK_VGA(clk_pixel),
     .I_COLOR(color),
@@ -491,13 +434,10 @@ module top
 
   // VGA to digital video converter
   wire [1:0] tmds_clock, tmds_red, tmds_green, tmds_blue;
-  vga2dvid
-  #(
+  vga2dvid #(
     .c_ddr(c_ddr?1'b1:1'b0),
     .c_shift_clock_synchronizer(1'b0)
-  )
-  vga2dvid_instance
-  (
+  ) vga2dvid_instance (
     .clk_pixel(clk_pixel),
     .clk_shift(clk_shift),
     .in_red(r),
@@ -513,8 +453,7 @@ module top
   );
 
   generate
-    if(c_ddr)
-    begin
+    if(c_ddr) begin
       // vendor specific DDR modules
       // convert SDR 2-bit input to DDR clocked 1-bit output (single-ended)
       // onboard GPDI
@@ -522,96 +461,91 @@ module top
       ODDRX1F ddr0_red   (.D0(tmds_red  [0]), .D1(tmds_red  [1]), .Q(gpdi_dp[2]), .SCLK(clk_shift), .RST(0));
       ODDRX1F ddr0_green (.D0(tmds_green[0]), .D1(tmds_green[1]), .Q(gpdi_dp[1]), .SCLK(clk_shift), .RST(0));
       ODDRX1F ddr0_blue  (.D0(tmds_blue [0]), .D1(tmds_blue [1]), .Q(gpdi_dp[0]), .SCLK(clk_shift), .RST(0));
-    end
-    else
-    begin
+    end else begin
       assign gpdi_dp[3] = tmds_clock[0];
       assign gpdi_dp[2] = tmds_red  [0];
       assign gpdi_dp[1] = tmds_green[0];
       assign gpdi_dp[0] = tmds_blue [0];
     end
   endgenerate
+endmodule
 
-  wire [3:0] audio;
-  generate
-    if(C_audio==0)
-      assign audio = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
-    if(C_audio==1)
+// BTN debouncer and signal generator for
+// dynamic phase shift control
+module btn_ecp5pll_phase
+#(
+  parameter c_debounce_bits = 16
+)
+(
+  input  clk,         // 1-100 MHz
+  input  inc, dec,    // BTNs
+  output [7:0] phase, // counter for display
+  output phasedir, phasestep, phaseloadreg
+);
+  reg [c_debounce_bits-1:0] R_debounce;
+  reg  [1:0] R_btn, R_btn_prev;
+  reg        R_new;
+  always @(posedge clk)
+  begin
+    if(R_debounce[c_debounce_bits-1])
     begin
-      wire dac1bit;
-      sigma_delta_dac
-      sigma_delta_dac_instance
-      (
-        .CLK(clock),
-        .RESET(reset_nes),
-        .DACin(sample),
-        .DACout(dac1bit)
-      );
-      assign audio = {4{dac1bit}};
-      // Digilent PmodAMP2
-      //assign gpio[12] = 1'b0; // gain
-      //assign gpio[6] = 1'b1; // shutdown
-      assign gpio[18] = dac1bit;
-      assign gpio[19] = dac1bit;
+      if(R_btn != R_btn_prev)
+      begin
+        R_debounce <= 0;
+        R_new <= 1;
+      end
+      R_btn[1] <= inc;
+      R_btn[0] <= dec;
+      R_btn_prev <= R_btn;
     end
-    if(C_audio==2)
+    else
     begin
-      wire dac1bit;
-      sigma_delta_dac
-      #(
-        .MSBI(11)
-      )
-      sigma_delta_dac_instance
-      (
-        .CLK(clock),
-        .RESET(reset_nes),
-        .DACin(sample[11:0]),
-        .DACout(dac1bit)
-      );
-      wire [$bits(audio)-1:0] dac0 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)];
-      wire [$bits(audio)-1:0] dac1 = sample[$bits(sample)-1:$bits(sample)-$bits(audio)] + 1;
-      assign audio = dac1bit ? dac1 : dac0;
+      R_debounce <= R_debounce + 1;
+      R_new <= 0;
     end
+  end
+  wire S_inc = R_btn[1];
+  wire S_dec = R_btn[0];
 
-  endgenerate
+  reg R_phasedir, R_phasestep, R_phasestep_early;
+  always @(posedge clk)
+  begin
+    if(R_new)
+    begin
+      R_phasedir        <= S_inc | S_dec ? S_inc : R_phasedir;
+      R_phasestep_early <= S_inc | S_dec;
+    end
+    // phasedir must be stable 5ns before phasestep is pulsed
+    R_phasestep <= R_phasestep_early;
+  end
+  assign phasedir     = R_phasedir;
+  assign phasestep    = R_phasestep;
+  assign phaseloadreg = 1'b0; // TODO support it
+  
+  reg [7:0] R_phase = 0;
+  always @(posedge clk)
+  begin
+    if(R_phasestep_early == 1 && R_phasestep == 0)
+      R_phase <= R_phasedir ? R_phase + 1 : R_phase - 1;
+  end
+  assign phase = R_phase; // for display
+endmodule
 
-  wire blank2;
-  wire [7:0] r2;
-  wire [7:0] g2;
-  wire [7:0] b2;
-  wire vga_vs2;
-  wire vga_hs2;
+module debouncer #(
+    parameter N = 7
+) (
+    input  clk,
+    input  btn,
+    output sig
+);
+    logic [N-1:0] buffer;
+    assign sig = buffer[N-1];
 
-  vga2
-  vga_i2
-  (
-    .I_CLK(clock),
-    .I_CLK_VGA(clk_pixel),
-    .I_COLOR(color),
-    .I_HCNT(cycle),
-    .I_VCNT(scanline),
-    .O_HSYNC(vga_hs2),
-    .O_VSYNC(vga_vs2),
-    .O_BLANK(blank2),
-    .O_RED(r2),
-    .O_GREEN(g2),
-    .O_BLUE(b2)
-  );
-
-  // Set the GPIO pins
-  assign gpio[0] = clk_pixel;
-  assign gpio[1] = ~blank2; // de
-  assign gpio[2] = vga_vs2;
-  assign gpio[3] = vga_hs2;
-
-  assign gpio[27] = 1'b1;
-  assign gpio[26] = 1'b1;
-  assign gpio[11] = 1'b1;
-  assign gpio[10] = 1'b1;
-
-  assign {gpio[25], gpio[24], gpio[23], gpio[22], gpio[21], gpio[20]} = r2[7:2];
-  assign {gpio[17], gpio[16], gpio[15], gpio[14], gpio[13], gpio[12]} = g2[7:2];
-  assign {gpio[9],  gpio[8],  gpio[7],  gpio[6],  gpio[5],  gpio[4]}  = b2[7:2];
-
-
+    always_ff @(posedge clk) begin
+        if (!buffer[N-1] && btn) begin
+            buffer <= buffer + 1;
+        end else if (!btn) begin
+            buffer <= 0;
+        end
+    end
 endmodule

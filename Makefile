@@ -51,12 +51,12 @@ VERILOG_FILES += mappers/Sunsoft.sv
 VERILOG_FILES += mappers/JYCompany.sv
 VERILOG_FILES += mappers/Sachen.sv
 
+#VERILOG_FILES += sdram-mist.sv
 VERILOG_FILES += sdram.v
-VERILOG_FILES += game_loader.v
+VERILOG_FILES += game_loader.sv
 VERILOG_FILES += flash_loader.v
 VERILOG_FILES += palette_ram.v
 VERILOG_FILES += vga.v
-VERILOG_FILES += vga2.v
 VERILOG_FILES += framebuffer.v
 VERILOG_FILES += sigma_delta_dac.v
 VERILOG_FILES += vga2dvid.v
@@ -90,8 +90,8 @@ VHDL_FILES += t65/T65_MCode.vhd
 VHDL_FILES += t65/T65_ALU.vhd
 VHDL_FILES += t65/T65.vhd
 
-GHDL_MODULE = -mghdl
-#GHDL_MODULE =
+#GHDL_MODULE = -mghdl
+GHDL_MODULE =
 
 %.json: ${VERILOG_FILES} ${VHDL_FILES}
 	$(YOSYS) $(GHDL_MODULE) -m ghdl -q -l synth.log \
@@ -101,7 +101,7 @@ GHDL_MODULE = -mghdl
 	-p "synth_ecp5 ${YOSYS_OPTIONS} -json $@"
 
 %_out.config: %.json
-	$(NEXTPNR-ECP5) $(NEXTPNR_OPTIONS) --json  $< --textcfg $@ --$(FPGA_KS) --freq 21 --package CABGA256 --lpf icepi-zero.lpf
+	$(NEXTPNR-ECP5) $(NEXTPNR_OPTIONS) --json  $< --textcfg $@ --$(FPGA_KS) --freq 50 --package CABGA256 --lpf icepi-zero.lpf
 
 %.bit: %_out.config
 	LANG=C $(ECPPACK) --freq 62.0 --compress --idcode $(IDCODE) $< $@
